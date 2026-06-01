@@ -1,0 +1,284 @@
+{% extends 'base.html' %}
+
+{% block title %}Генерация работы{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Создание новой работы</h1>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <form id="generateForm">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Название работы</label>
+                        <input type="text" class="form-control" id="title" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="subject" class="form-label">Предмет</label>
+                        <select class="form-select" id="subject" required>
+                            <option value="">Выберите предмет...</option>
+                            {% for subject in subjects %}
+                                <option value="{{ subject.id }}">{{ subject.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Темы</label>
+                        <div id="topicsList" class="border p-3 rounded" style="min-height: 100px;">
+                            <p class="text-muted">Сначала выберите предмет</p>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="variants" class="form-label">Количество вариантов</label>
+                            <input type="number" class="form-control" id="variants" min="2" max="8" value="4" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="tasksCount" class="form-label">Количество заданий</label>
+                            <input type="number" class="form-control" id="tasksCount" min="1" max="15" value="5" required>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-block">
+    <button type="button" class="btn" id="previewBtn" style="background-color: #fff; border: 1px solid #aaa; border-radius: 6px; color: #333; padding: 0.4rem 0.8rem; font-size: 0.875rem; cursor: pointer;">Предпросмотр</button>
+    <button type="submit" class="btn" id="generateBtn" style="background-color: #fff; border: 1px solid #aaa; border-radius: 6px; color: #333; padding: 0.4rem 0.8rem; font-size: 0.875rem; cursor: pointer;">Сгенерировать</button>
+</div>
+                
+                <div id="progressContainer" style="display: none; margin-top: 20px;">
+                    <div class="progress">
+                        <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 0%">0%</div>
+                    </div>
+                    <p class="text-center mt-2" id="progressText">Подготовка к генерации...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card" id="previewCard" style="display: none;">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"> Предпросмотр работы</h5>
+            </div>
+            <div class="card-body" style="max-height: 500px; overflow-y: auto;">
+                <div id="previewContent">
+                    <p class="text-muted">Заполните форму и нажмите «Предпросмотр»</p>
+                </div>
+            </div>
+            <div class="card-footer">
+                <small class="text-muted">Это примерный вид работы. После генерации вы получите PDF файл.</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="result" class="mt-4"></div>
+
+<script>
+document.getElementById('subject').addEventListener('change', function() {
+    const subjectId = this.value;
+    const topicsList = document.getElementById('topicsList');
+    
+    if (subjectId) {
+        fetch(`/get-topics/${subjectId}/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.length > 0) {
+                    let html = '';
+                    data.forEach(topic => {
+                        html += `
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" 
+                                       value="${topic.id}" id="topic${topic.id}">
+                                <label class="form-check-label" for="topic${topic.id}">
+                                    ${topic.title} (уровень ${topic.difficulty_level})
+                                </label>
+                            </div>
+                        `;
+                    });
+                    topicsList.innerHTML = html;
+                } else {
+                    topicsList.innerHTML = '<p class="text-muted">Нет тем для этого предмета</p>';
+                }
+            });
+    } else {
+        topicsList.innerHTML = '<p class="text-muted">Сначала выберите предмет</p>';
+    }
+});
+
+document.getElementById('previewBtn').addEventListener('click', function() {
+    const selectedTopics = [];
+    document.querySelectorAll('#topicsList input:checked').forEach(cb => {
+        selectedTopics.push(parseInt(cb.value));
+    });
+    
+    if (selectedTopics.length === 0) {
+        alert('Выберите хотя бы одну тему');
+        return;
+    }
+    
+    const title = document.getElementById('title').value;
+    if (!title) {
+        alert('Введите название работы');
+        return;
+    }
+    
+    const variantCount = parseInt(document.getElementById('variants').value);
+    const tasksCount = parseInt(document.getElementById('tasksCount').value);
+    
+    let previewHtml = `
+        <h4>${escapeHtml(title)}</h4>
+        <p><strong>Количество вариантов:</strong> ${variantCount}</p>
+        <p><strong>Количество заданий на вариант:</strong> ${tasksCount}</p>
+        <hr>
+        <h5>Примерный вид варианта:</h5>
+        <div class="alert alert-secondary">
+            <strong>Вариант 1</strong><br><br>
+    `;
+    
+    for (let i = 1; i <= Math.min(tasksCount, 3); i++) {
+        previewHtml += `${i}. [Здесь будет сгенерировано задание №${i}]<br>
+                         Ответ: ____________________<br><br>`;
+    }
+    
+    if (tasksCount > 3) {
+        previewHtml += `<em>... и еще ${tasksCount - 3} заданий</em><br><br>`;
+    }
+    
+    previewHtml += `
+            <strong>Всего вариантов:</strong> ${variantCount}<br>
+            <strong>Каждый вариант уникален:</strong> случайные числа и порядок заданий
+        </div>
+        <div class="alert alert-info mt-2">
+            <strong>ℹ Информация:</strong><br>
+            • Вопросы генерируются автоматически на основе выбранных тем<br>
+            • Числовые значения в заданиях будут случайными<br>
+            • Порядок заданий в каждом варианте будет разный<br>
+            • Для тестовых вопросов варианты ответов также будут перемешаны
+        </div>
+    `;
+    
+    document.getElementById('previewContent').innerHTML = previewHtml;
+    document.getElementById('previewCard').style.display = 'block';
+    document.getElementById('previewCard').scrollIntoView({ behavior: 'smooth' });
+});
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+document.getElementById('generateForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const selectedTopics = [];
+    document.querySelectorAll('#topicsList input:checked').forEach(cb => {
+        selectedTopics.push(parseInt(cb.value));
+    });
+    
+    if (selectedTopics.length === 0) {
+        alert('Выберите хотя бы одну тему');
+        return;
+    }
+    
+    const data = {
+        title: document.getElementById('title').value,
+        subject_id: parseInt(document.getElementById('subject').value),
+        topics: selectedTopics,
+        variant_count: parseInt(document.getElementById('variants').value),
+        tasks_count: parseInt(document.getElementById('tasksCount').value)
+    };
+    
+    console.log("Отправляемые данные:", data);
+    
+    const progressContainer = document.getElementById('progressContainer');
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    const generateBtn = document.getElementById('generateBtn');
+    const previewBtn = document.getElementById('previewBtn');
+    
+    progressContainer.style.display = 'block';
+    generateBtn.disabled = true;
+    previewBtn.disabled = true;
+    generateBtn.textContent = 'Генерация...';
+    
+    let progress = 0;
+    const interval = setInterval(() => {
+        if (progress < 90) {
+            progress += 10;
+            progressBar.style.width = progress + '%';
+            progressBar.textContent = progress + '%';
+            
+            if (progress === 30) progressText.textContent = 'Создание задания...';
+            if (progress === 50) progressText.textContent = 'Подстановка случайных значений...';
+            if (progress === 70) progressText.textContent = 'Вычисление ответов...';
+            if (progress === 80) progressText.textContent = 'Формирование PDF...';
+        }
+    }, 300);
+    
+    fetch('/generate/create/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        clearInterval(interval);
+        progressBar.style.width = '100%';
+        progressBar.textContent = '100%';
+        progressText.textContent = 'Готово!';
+        
+        if (data.status === 'ok') {
+            setTimeout(() => {
+                document.getElementById('result').innerHTML = `
+                    <div class="alert alert-success">
+                         Работа успешно создана! <a href="/dashboard/">Перейти к списку работ</a>
+                    </div>
+                `;
+                document.getElementById('generateForm').reset();
+                document.getElementById('topicsList').innerHTML = '<p class="text-muted">Сначала выберите предмет</p>';
+                document.getElementById('previewCard').style.display = 'none';
+                progressContainer.style.display = 'none';
+                generateBtn.disabled = false;
+                previewBtn.disabled = false;
+                generateBtn.textContent = ' Сгенерировать';
+                progressBar.style.width = '0%';
+                progressBar.textContent = '0%';
+            }, 500);
+        } else {
+            progressContainer.style.display = 'none';
+            generateBtn.disabled = false;
+            previewBtn.disabled = false;
+            generateBtn.textContent = ' Сгенерировать';
+            document.getElementById('result').innerHTML = `
+                <div class="alert alert-danger">
+                     Ошибка: ${data.message}
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        clearInterval(interval);
+        progressContainer.style.display = 'none';
+        generateBtn.disabled = false;
+        previewBtn.disabled = false;
+        generateBtn.textContent = ' Сгенерировать';
+        document.getElementById('result').innerHTML = `
+            <div class="alert alert-danger">
+                 Ошибка соединения
+            </div>
+        `;
+    });
+});
+</script>
+{% endblock %}

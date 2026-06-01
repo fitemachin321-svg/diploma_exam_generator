@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+
+{% block title %}Панель управления{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="mb-0">Мои работы</h1>
+    <a href="{% url 'generate_form' %}" class="btn" style="background-color: #fff; border: 1px solid #aaa; border-radius: 6px; color: #333; text-decoration: none; padding: 0.4rem 0.8rem;">Создать новую работу</a>
+</div>
+
+<!-- Форма поиска и фильтрации -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Поиск по названию</label>
+                <input type="text" name="search" class="form-control" placeholder="Введите название..." value="{{ search_query }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Фильтр по предмету</label>
+                <select name="subject" class="form-select">
+                    <option value="all">Все предметы</option>
+                    {% for subject in subjects %}
+                        <option value="{{ subject.id }}" {% if subject_filter|add:"0" == subject.id %}selected{% endif %}>{{ subject.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Фильтр по дате</label>
+                <select name="date_filter" class="form-select">
+                    <option value="">Все работы</option>
+                    <option value="today" {% if date_filter == 'today' %}selected{% endif %}>Сегодня</option>
+                    <option value="week" {% if date_filter == 'week' %}selected{% endif %}>За неделю</option>
+                    <option value="month" {% if date_filter == 'month' %}selected{% endif %}>За месяц</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn" style="background-color: #fff; border: 1px solid #aaa; border-radius: 6px; width: 100%;">Применить</button>
+                <a href="{% url 'dashboard' %}" class="btn ms-2" style="background-color: #fff; border: 1px solid #aaa; border-radius: 6px;">Сбросить</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Результаты -->
+{% if works %}
+    <div class="row">
+        {% for work in works %}
+            <div class="col-md-4 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ work.title }}</h5>
+                        <p class="card-text">
+                            <strong>Предмет:</strong> {{ work.subject.name }}<br>
+                            <strong>Вариантов:</strong> {{ work.variant_count }}<br>
+                            <strong>Дата:</strong> {{ work.created_at|date:"d.m.Y H:i" }}
+                        </p>
+                        <div class="btn-group" role="group" style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            {% if work.pdf_file %}
+                                <a href="{{ work.pdf_file.url }}" class="btn" style="background-color: #fff; border: 1px solid #aaa; border-radius: 6px; color: #333; text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.875rem;" download>PDF</a>
+                            {% endif %}
+                            {% if work.docx_file %}
+                                <a href="{{ work.docx_file.url }}" class="btn" style="background-color: #fff; border: 1px solid #aaa; border-radius: 6px; color: #333; text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.875rem;" download>DOCX</a>
+                            {% endif %}
+                            {% if work.answers_file %}
+                                <a href="{{ work.answers_file.url }}" class="btn" style="background-color: #fff; border: 1px solid #aaa; border-radius: 6px; color: #333; text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.875rem;" download>Ответы</a>
+                            {% endif %}
+                            <button class="btn" style="background-color: #fff; border: 1px solid #aaa; border-radius: 6px; color: #333; padding: 0.4rem 0.8rem; font-size: 0.875rem; cursor: pointer;" data-bs-toggle="modal" data-bs-target="#deleteModal" data-work-id="{{ work.id }}" data-work-title="{{ work.title }}">Удалить</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+    
+    <div class="alert alert-info mt-3">
+        Найдено работ: {{ works|length }}
+    </div>
+{% else %}
+    <div class="alert alert-info">
+        {% if search_query or subject_filter != 'all' or date_filter %}
+            По вашему запросу ничего не найдено. <a href="{% url 'dashboard' %}">Сбросить фильтры</a>
+        {% else %}
+            У вас пока нет сгенерированных работ. <a href="{% url 'generate_form' %}">Создайте первую!</a>
+        {% endif %}
+    </div>
+{% endif %}
+
+<!-- Модальное окно подтверждения удаления -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Подтверждение удаления</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <div class="modal-body">
+                Вы уверены, что хотите удалить работу <strong id="deleteWorkTitle"></strong>?
+                <br><br>
+                <span class="text-danger">Внимание: Это действие необратимо. Файлы будут удалены с сервера.</span>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn" style="background-color: #fff; border: 1px solid #aaa; border-radius: 6px; color: #333; padding: 0.4rem 0.8rem; cursor: pointer;" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn" id="confirmDeleteBtn" style="background-color: #fff; border: 1px solid #aaa; border-radius: 6px; color: #333; padding: 0.4rem 0.8rem; cursor: pointer;">Удалить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let workIdToDelete = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    const deleteModal = document.getElementById('deleteModal');
+    
+    deleteModal.addEventListener('show.bs.modal', function(event) {
+        const button = event.relatedTarget;
+        workIdToDelete = button.getAttribute('data-work-id');
+        const workTitle = button.getAttribute('data-work-title');
+        document.getElementById('deleteWorkTitle').textContent = workTitle;
+    });
+    
+    document.getElementById('confirmDeleteBtn').addEventListener('click', function() {
+        if (workIdToDelete) {
+            fetch(`/delete-work/${workIdToDelete}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json'
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    location.reload();
+                } else {
+                    alert('Ошибка: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('Произошла ошибка при удалении');
+            });
+        }
+    });
+});
+</script>
+{% endblock %}
