@@ -105,3 +105,6 @@ LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'index'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+# Настройка для работы с PDF на сервере
+import os
+os.environ['MPLCONFIGDIR'] = '/tmp'

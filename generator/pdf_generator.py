@@ -7,12 +7,35 @@ from reportlab.pdfbase.ttfonts import TTFont
 import os
 from datetime import datetime
 
+# Регистрация шрифта
 try:
-    font_path = "C:/Windows/Fonts/arial.ttf"
-    if os.path.exists(font_path):
-        pdfmetrics.registerFont(TTFont('Arial', font_path))
-except:
-    pass
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    
+    # Пробуем разные варианты
+    font_paths = [
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",  # Linux (Render)
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",                 # Linux
+        "C:/Windows/Fonts/arial.ttf",                                       # Windows
+        "C:/Windows/Fonts/ariali.ttf",                                     # Windows (альтернатива)
+    ]
+    
+    font_registered = False
+    for path in font_paths:
+        if os.path.exists(path):
+            pdfmetrics.registerFont(TTFont('Arial', path))
+            font_registered = True
+            print(f"Шрифт загружен: {path}")
+            break
+    
+    if not font_registered:
+        # Используем стандартный шрифт ReportLab
+        from reportlab.lib.fonts import addMapping
+        addMapping('Helvetica', 0, 0, 'Helvetica')
+        print("Используется шрифт Helvetica (без кириллицы)")
+        
+except Exception as e:
+    print(f"Ошибка загрузки шрифта: {e}")
 
 class ExamPDFGenerator:
     def __init__(self, filename, title):
